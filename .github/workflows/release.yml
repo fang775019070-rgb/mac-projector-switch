@@ -1,0 +1,40 @@
+name: Publish download
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: macos-26
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify and build
+        run: |
+          zsh test.sh
+          zsh build.sh
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' 'dist/苹果电脑投影开关.app/Contents/Info.plist')" = '1.2.0'
+      - name: Package application
+        run: |
+          mkdir -p release-assets
+          ditto -c -k --sequesterRsrc --keepParent 'dist/苹果电脑投影开关.app' 'release-assets/MacProjectorSwitch-v1.2.0-arm64.zip'
+          cd release-assets
+          shasum -a 256 MacProjectorSwitch-v1.2.0-arm64.zip > MacProjectorSwitch-SHA256SUMS.txt
+      - name: Publish preview with downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.2.0 \
+            release-assets/MacProjectorSwitch-v1.2.0-arm64.zip \
+            release-assets/MacProjectorSwitch-SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --prerelease --title '苹果电脑投影开关（Mac Projector Switch）v1.2.0' \
+            --notes-file RELEASE.md
